@@ -1,0 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'AWS 3-Tier Application Architecture with Security Best Practices'
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+  PublicSubnetACidr:
+    Type: String
+    Default: 10.0.3.0/24
+  PublicSubnetBCidr:
+    Type: String
+    Default: 10.0.1.0/24
+  AppSubnetACidr:
+    Type: String
+    Default: 10.0.3.0/24
+  AppSubnetBCidr:
+    Type: String
+    Default: 10.0.3.0/24
+  DbSubnetACidr:
+    Type: String
+    Default: 10.0.5.0/24
+  DbSubnetBCidr:
+    Type: String
+    Default: 10.0.5.0/24
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: 3Tier-VPC
+        - Key: Compliance
+          Value: NIST, PCI DSS, FSBP, CIS, AWS-Standard
+
+  PublicAccessBlockConfiguration:
+    BlockPublicAcls: true
+    BlockPublicPolicy: true
+    IgnorePublicAcls: true
+    RestrictPublicBuckets: true
+
+  VPCEndpoints:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: com.amazonaws.us-east-1.s3
+      VpcEndpointType: Gateway
+      RouteTableIds:
+        - !Ref RouteTable
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: SecureRouteTable
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for 3-tier architecture'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Compliance
+          Value: CIS, AWS-Standard
+
+  KMSKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: 'KMS Key for encrypting data'
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+      Tags:
+        - Key: Compliance
+          Value: PCI DSS, NIST
+
+  BucketEncryption:
+    Type: AWS::S3::BucketEncryption
+    Properties:
+      Bucket: !Ref MySecureBucket
+      ServerSideEncryptionConfiguration:
+        - ServerSideEncryptionByDefault:
+            SSEAlgorithm: AES256
+      Tags:
+        - Key: Compliance
+          Value: AWS-Standard, FSBP
+
+  MySecureBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: my-secure-app-bucket
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Compliance
+          Value: NIST, PCI DSS, CIS, AWS-Standard
